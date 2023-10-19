@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #e6ecf0;
+            text-align: center;
+            padding: 40px 0;
+        }
+
+        h1 {
+            color: #14171A;
+            font-size: 32px;
+            margin-bottom: 40px;
+        }
+
+        form {
+            background-color: #fff;
+            border-radius: 25px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            max-width: 500px;
+            margin: 20px auto;
+            text-align: center;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: capitalize;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 25px;
+            transition: border 0.2s;
+        }
+
+        textarea:focus {
+            border-color: #1DA1F2;
+            outline: none;
+        }
+
+        input[type="submit"], button {
+            background-color: #1DA1F2;
+            color: #fff;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 15px;
+            transition: background-color 0.2s;
+        }
+
+        input[type="submit"]:hover, button:hover {
+            filter: brightness(90%);
+        }
+
+        .post {
+            background-color: #fff;
+            border: 1px solid #ccc;
+            margin: 10px;
+            padding: 10px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .post-content {
+            font-size: 16px;
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+
+        .post-image {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Welcome Home</h1>
+    
+    <form action="http://localhost:8001/logout" method="post">
+        <button value="logout">Logout</button>
+    </form>
+
+    <form action="http://localhost:8001/uploadProfilPictureUrl" method="post">
+        <label for="urlPath">Profile picture URL:</label>
+        <textarea id="urlPath" name="urlPath"></textarea>
+        <input type="submit" value="Update Picture">
+    </form>
+
+    <form action="http://localhost:8001/uploadProfilPicture" method="post" enctype="multipart/form-data">
+        <label>Or upload a profile picture:</label>
+        <input type="file" name="profile_pic" accept="image/*">
+        <input type="submit" value="Upload Image">
+    </form>
+
+    <form action="http://localhost:8001/new_post" method="post" enctype="multipart/form-data">
+        <label for="text">Create a post:</label>
+        <textarea id="text" name="text" placeholder="What's on your mind?"></textarea>
+        <label>Attach an image (optional):</label>
+        <input type="file" name="posts_pics" accept="image/*">
+        <label>Or url image post:</label>
+        <textarea id="urlPathPost" name="urlPathPost"></textarea><br><br></textarea>
+
+        <input type="submit" value="Post">
+    </form>
+</body>
+
+</html>
