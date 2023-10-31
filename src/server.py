@@ -56,14 +56,21 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
             )
         ''')
 
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY,
+                from_id INTEGER,
+                to_id INTEGER,
+                created_at TEXT,
+                content TEXT,
+                FOREIGN KEY (from_id) REFERENCES users (id),
+                FOREIGN KEY (to_id) REFERENCES users (id)
+            )
+        ''')
+        
 
         conn.commit()
         conn.close()
-
-
-            
-
-            
             
     def is_authenticated(self) -> bool:
         if "Cookie" not in self.headers:
@@ -107,6 +114,15 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
         cursor = conn.cursor()
         return conn, cursor
 
+    def handle_index(self):
+        with open('index.html', 'r') as f:
+            content = f.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            self.wfile.write(content.encode())
+            
+            
     # Gestion de l'inscription
     def handle_register(self, post_data):
         params = parse_qs(post_data)
@@ -157,7 +173,6 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                 # User is blocked
                 raise ValueError("Blocked user")
             
-
             # Log the user in and redirect to a different page
             session_id = str(uuid.uuid4())
             cookie = http.cookies.SimpleCookie()
@@ -172,18 +187,13 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Set-Cookie", cookie["session_id"].OutputString())
             self.end_headers()
 
-            
         except ValueError as e:
-            # Handle known errors
-            self.send_response(302)
-            self.send_header('Location', f'/index.html?error={e}')  # Change this URL to your login page with error message
+            self.send_response(400)  # Send a "Bad Request" status code
+            self.send_header('Content-Type', 'text/html')
             self.end_headers()
-
-        except Exception as e:
-            # Handle unexpected errors
-            self.send_response(500)  # Internal Server Error
-            self.end_headers()
-            print(f"Error during login: {e}")  # Log the error for debugging purposes
+            # Send a custom error message to the client
+            error_message = f"<div style='color: red;'>{str(e)}</div>"
+            self.wfile.write(error_message.encode('utf-8'))
 
     def handle_logout(self):
         if "Cookie" not in self.headers:
@@ -200,17 +210,13 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
         conn.close()
 
         self.send_response(302)
-        self.send_header('Location', '/index.html')
-        #self.end_headers()
-
         # Si vous souhaitez également effacer le cookie côté client :
         expired_cookie = http.cookies.SimpleCookie()
         expired_cookie["session_id"] = ""
         expired_cookie["session_id"]["expires"] = 'Thu, 01 Jan 1970 00:00:00 GMT'  # Date dans le passé pour l'expirer
         self.send_header("Set-Cookie", expired_cookie["session_id"].OutputString())
         self.end_headers()
-
-
+    
     # Gestion de recuperation mot passe
     def handle_forgetPassword(self, post_data):
         params = parse_qs(post_data)
@@ -417,7 +423,7 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(b'Session invalide ou non authentifiee.')
 
         elif self.path == "/logout":
-            self.handle_logout()
+            self.handle_logout()    
         elif self.path == "/new_post":
             conn, cursor = self.connect_to_db()
             self.send_response(302)
@@ -461,7 +467,7 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
             post_data = self.rfile.read(content_length).decode('utf-8')
             # Étape 1: Parsez post_data pour obtenir le contenu du post
             params = parse_qs(post_data)
-            url_path = params['urlPath'][0]  # Assurez-vous que 'content' est le nom correct du champ dans votre formulaire
+            url_path = params['urlPath'][0] 
             conn, cursor = self.connect_to_db()
 
             cursor.execute('UPDATE users SET picture_path = ? WHERE id = ?',
@@ -534,169 +540,33 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
 
                     table_content += f"</tr>"
 
-                
+
                 user_id = self.get_user_id_from_cookie()
                 adminStatus = getAdminStateById(user_id, self)
-                print("self.user_isAdmin" + str(adminStatus))
-                if(adminStatus == 1):
-                    
-                    # Générez la page "administration.html" avec le contenu de la table
-                    admin_page = f"""<!DOCTYPE html>
-                    <html>
-                    <head>
-                        <title>Administration</title>
-                        <style>
-                        body {{
-                            font-family: Arial, sans-serif;
-                            background-color: #f4f4f4;
-                            margin: 0;
-                            padding: 0;
-                        }}
-                        h1 {{
-                            text-align: center;
-                            padding: 20px;
-                        }}
-                        table {{
-                            width: 80%;
-                            margin: 20px auto;
-                            border-collapse: collapse;
-                            background-color: #fff;
-                            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-                        }}
-                        table th, table td {{
-                            border: 1px solid #ccc;
-                            padding: 5px;
-                            text-align: center;
-                        }}
-                        th {{
-                            background-color: #333;
-                            color: #fff;
-                        }}
-                        tr:nth-child(even) {{
-                            background-color: #f2f2f2;
-                        }}
-                        tr:nth-child(odd) {{
-                            background-color: #e6e6e6;
-                        }}
-                        button {{
-                            background-color: #0074d9;
-                            color: #fff;
-                            border: none;
-                            padding: 5px 10px;
-                            cursor: pointer;
-                        }}
-                    </style>
-                    <script>
-                    function deleteUser(userId) {{
-                        if (confirm("Are you sure you want to delete this user?")) {{
-                            // Utilisez la méthode fetch pour envoyer une demande de suppression au serveur
-                            fetch(`http://localhost:8001/delete-user/`+userId, {{
-                                method: 'DELETE',
-                            }})
-                            .then(response => {{
-                                if (response.status === 200) {{
-                                    // La suppression a réussi, vous pouvez afficher un message ou effectuer d'autres actions si nécessaire
-                                    console.log('Suppression réussie');
-                                    // Actualisez la page ou effectuez d'autres actions si nécessaire
-                                    location.reload();
-                                }} else {{
-                                    // La suppression a échoué, affichez un message d'erreur ou effectuez d'autres actions si nécessaire
-                                    console.log('Échec de la suppression');
-                                }}
-                            }})
-                            .catch(error => {{
-                                // Gérez les erreurs de la requête AJAX
-                                console.error('Erreur de la requête AJAX', error);
-                            }});
-                        }}
-                    }}
 
-
-                function updateUser(userId) {{
-                        // Collectez les données à partir des champs d'entrée et des boutons radio
-                        var name = document.getElementById('name_' + userId).value;
-                        var surname = document.getElementById('surname_' + userId).value;
-                        var password = document.getElementById('password_' + userId).value;
-                        var birth = document.getElementById('birth_' + userId).value;
-                        var email = document.getElementById('email_' + userId).value;
-                        var bio = document.getElementById('bio_' + userId).value;
-                        var isAdmin = document.querySelector('input[name="isAdmin_' + userId + '"]:checked').value;
-                        var isBlocked = document.querySelector('input[name="isBlocked_' + userId + '"]:checked').value;
-
-                        // Créez un objet contenant les données à envoyer au serveur
-                        var userData = {{
-                            userId: userId,
-                            name: name,
-                            surname: surname,
-                            password: password,
-                            birth: birth,
-                            email: email,
-                            bio: bio,
-                            isAdmin: isAdmin,
-                            isBlocked: isBlocked
-                        }};
-
-                        // Utilisez la méthode fetch pour envoyer les données au serveur via une requête POST
-                        fetch('http://localhost:8001/administration-update', {{
-                            method: 'POST',
-                            headers: {{
-                                'Content-Type': 'application/json'
-                            }},
-                            body: JSON.stringify(userData)
-                        }})
-                        .then(response => {{
-                            if (response.status === 200) {{
-                                // La mise à jour a réussi, vous pouvez afficher un message ou effectuer d'autres actions si nécessaire
-                                console.log('Mise à jour réussie');
-                            }} else {{
-                                // La mise à jour a échoué, affichez un message d'erreur ou effectuez d'autres actions si nécessaire
-                                console.log('Échec de la mise à jour');
-                            }}
-                        }})
-                        .catch(error => {{
-                            // Gérez les erreurs de la requête AJAX
-                            console.error('Erreur de la requête AJAX', error);
-                        }});
-                    }}
-                    </script>
-                    </head>
-                    <body>
-                        <h1>Administration</h1>
-                        <table>
-                            <tr>
-                                <th>ID</th>
-                                <th>Name</th>
-                                <th>Surname</th>
-                                <th>Password</th>
-                                <th>Birth Date</th>
-                                <th>Email</th>
-                                <th>Bio</th>
-                                <th>Is Admin</th>
-                                <th>Is Blocked</th>
-                                <th>Action</th>
-                                <th>Delete</th>
-                            </tr>
-                            {table_content}
-                        </table>
-                    </body>
-                    </html>
-                    """
-
-                
+                if adminStatus == 1:
+                    # Chargez le contenu du fichier 'administration.html'
+                    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'administration.html'), 'r') as file:
+                        admin_template = file.read()
+                        
+                    # Remplacez les placeholders par le contenu généré
+                    admin_page = admin_template.replace('{table_content}', table_content)
                 else:
-                    
-                    admin_page=f""" <p>not admin no panel</p>"""
-                
+                    admin_page = """ <p>not admin no panel</p>"""
+
+                # Envoie la page au client
                 self.send_response(200)
-                self.send_header("Content-type", "text/html")
+                self.send_header('Content-type', 'text/html')
                 self.end_headers()
                 self.wfile.write(admin_page.encode('utf-8'))
+
             else:
                 self.send_response(403)
                 self.send_header('Content-type', 'text/html')
                 self.end_headers()
-                self.wfile.write(b'Session invalide ou non .')
-
+                self.wfile.write(b'Access denied. Authentication required.')
+                
+                
         elif self.path == "/administration-update":
             if self.is_authenticated():
                 # Obtenez les données JSON de la requête POST
@@ -714,8 +584,6 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                 bio = user_data['bio']
                 isAdmin = user_data['isAdmin']
                 isBlocked = user_data['isBlocked']
-                print("AAAAAAAAAAAAAAAAAAAAAAAAAA"+ str(isAdmin))
-                print("AAAAAAAAAAAAAAAAAAAsssssssAAAAAAA"+ str(isBlocked))
 
                 # Mettez à jour les informations de l'utilisateur dans la base de données
                 conn, cursor = self.connect_to_db()
@@ -830,172 +698,20 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                 user_password = user[3]
                 user_email = user[4]
 
-                # Updated User Settings Form
-                form_html = f'''
-                <!DOCTYPE html>
-                <html lang="en">
+                # Lisez le contenu du fichier HTML
+                file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'setting.html')
+                with open(file_path, 'r') as f:
 
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Settings</title>
-                    <style>
-                        body {{
-                            font-family: Arial, sans-serif;
-                            background-color: #e6ecf0;
-                            text-align: center;
-                            padding: 20px;
-                        }}
+                    form_template = f.read()
 
-                        h1 {{
-                            color: #14171A;
-                        }}
-
-                        form {{
-                            background-color: #fff;
-                            border-radius: 25px;
-                            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-                            padding: 20px;
-                            max-width: 400px;
-                            margin: 0 auto;
-                            text-align: center;
-                            margin-bottom: 20px;
-                        }}
-
-                        label {{
-                            display: block;
-                            font-weight: bold;
-                            margin-bottom: 5px;
-                            text-transform: capitalize;
-                        }}
-
-                        input, textarea {{
-                            width: 100%;
-                            padding: 10px;
-                            margin: 5px 0;
-                            border: 1px solid #ccc;
-                            border-radius: 25px;
-                            transition: border 0.2s;
-                        }}
-
-                        input:focus, textarea:focus {{
-                            border-color: #1DA1F2;
-                            outline: none;
-                        }}
-
-                        input[type="submit"] {{
-                            background-color: #1DA1F2;
-                            color: #fff;
-                            padding: 10px 20px;
-                            border: none;
-                            border-radius: 25px;
-                            cursor: pointer;
-                            font-weight: bold;
-                            transition: background-color 0.2s;
-                        }}
-
-                        input[type="submit"]:hover {{
-                            filter: brightness(90%);
-                        }}
-                    </style>
-                </head>
-
-                <body>
-                    <h1>Settings</h1>
-                    <form method="post" action="/update_settings">
-                        <label for="name">Name:</label>
-                        <input type="text" name="name" id="name" value="{user_name}" placeholder="Enter your name" required>
-
-                        <label for="surname">Surname:</label>
-                        <input type="text" name="surname" id="surname" value="{user_surname}" placeholder="Enter your surname" required>
-
-                        <label for="bio">Bio:</label>
-                        <textarea name="bio" id="bio" placeholder="Enter your bio">{user_bio}</textarea>
-
-                        <label for="password">Password:</label>
-                        <input type="password" name="password" id="password" value="{user_password}" placeholder="Enter your password" required>
-
-                        <label for="email">Email:</label>
-                        <input type="email" name="email" id="email" value="{user_email}" placeholder="Enter your email" required>
-
-                        <input type="submit" value="Update">
-                    </form>
-                </body>
-
-                </html>
-                '''
+                # Remplacez les placeholders par les valeurs dynamiques
+                form_html = form_template.replace("%%USER_NAME%%", user_name)
+                form_html = form_html.replace("%%USER_SURNAME%%", user_surname)
+                form_html = form_html.replace("%%USER_BIO%%", user_bio)
+                form_html = form_html.replace("%%USER_PASSWORD%%", user_password)
+                form_html = form_html.replace("%%USER_EMAIL%%", user_email)
 
                 self.wfile.write(form_html.encode())
-
-
-        elif self.path == "/setting.html":
-                self.send_response(200)
-                self.send_header('Content-type', 'text/html')
-                self.end_headers()
-
-                user_id = self.get_user_id_from_cookie()
-                conn, cursor = self.connect_to_db()
-                cursor.execute("SELECT name, surname, bio, password, email FROM users WHERE id=?", (user_id,))
-                user = cursor.fetchone()
-                conn.close()
-
-                if user:
-                    user_name = user[0]
-                    user_surname = user[1]
-                    user_bio = user[2]
-                    user_password = user[3]
-                    user_email = user[4]
-
-                    # Formulaire pour mettre à jour les données de l'utilisateur
-                    form_html = f'''
-                    <style>
-                        body {{
-                            font-family: Arial, sans-serif;
-                        }}
-                        form {{
-                            width: 300px;
-                            margin: 0 auto;
-                        }}
-                        label {{
-                            display: block;
-                            margin-top: 10px;
-                        }}
-                        input, textarea {{
-                            width: 100%;
-                            padding: 5px;
-                            margin-bottom: 10px;
-                        }}
-                        input[type="submit"] {{
-                            background-color: #4CAF50;
-                            color: white;
-                            padding: 10px 15px;
-                            border: none;
-                            border-radius: 3px;
-                            cursor: pointer;
-                        }}
-                    </style>
-                    <form method="post" action="/update_settings">
-                        <label for="name">Name:</label>
-                        <input type="text" name="name" id="name" value="{user_name}" placeholder="Enter your name" required>
-
-                        <label for="surname">Surname:</label>
-                        <input type="text" name="surname" id="surname" value="{user_surname}" placeholder="Enter your surname" required>
-
-                        <label for="bio">Bio:</label>
-                        <textarea name="bio" id="bio" placeholder="Enter your bio">{user_bio}</textarea>
-
-                        <label for="password">Password:</label>
-                        <input type="password" name="password" id="password" value="{user_password}" placeholder="Enter your password" required>
-
-                        <label for="email">Email:</label>
-                        <input type="email" name="email" id="email" value="{user_email}" placeholder="Enter your email" required>
-
-                        <input type="submit" value="Update">
-                    </form>
-                    '''
-
-                    self.wfile.write(form_html.encode())
-
 
 
         elif self.path.startswith("/profile_pics/"):
@@ -1080,7 +796,14 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                     response += f"Picture: <img src='{formatted_post_image_src}'><br><br>"
                 else:
                     response += "No post picture available.<br><br>"
-
+            response += '''
+                    <form action="http://localhost:8001/message" method="post">
+                        <label for="sendMessage">Send Message</label>
+                        <textarea id="private_message" name="private_message"></textarea>
+                        <input type="hidden" name="user_id" value="{user_id}">
+                        <input type="submit" value="Send">
+                    </form>
+                    '''
             self.wfile.write(response.encode())
 
         elif self.path.startswith("/delete-user/"):
@@ -1103,101 +826,6 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(f"Error deleting user: {str(e)}".encode('utf-8'))
         else:
             print("else")
-
-def generate_setting_page(user_info):
-    name, surname, email, bio = user_info
-
-    html = """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Settings</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                background-color: #e6ecf0;
-                text-align: center;
-                padding: 40px 0;
-            }
-
-            h1 {
-                color: #14171A;
-                font-size: 32px;
-                margin-bottom: 40px;
-            }
-
-            form {
-                background-color: #fff;
-                border-radius: 25px;
-                box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
-                padding: 30px;
-                max-width: 500px;
-                margin: 20px auto;
-                text-align: left;
-            }
-
-            label {
-                display: block;
-                font-weight: bold;
-                margin-bottom: 10px;
-                margin-top: 20px;
-                text-transform: capitalize;
-            }
-
-            input[type="text"], textarea {
-                width: 100%;
-                padding: 10px;
-                border: 1px solid #ccc;
-                border-radius: 25px;
-                transition: border 0.2s;
-            }
-
-            input[type="text"]:focus, textarea:focus {
-                border-color: #1DA1F2;
-                outline: none;
-            }
-
-            input[type="submit"] {
-                display: block;
-                background-color: #1DA1F2;
-                color: #fff;
-                padding: 12px 25px;
-                border: none;
-                border-radius: 25px;
-                cursor: pointer;
-                margin-top: 20px;
-                margin-left: auto;
-                margin-right: auto;
-                transition: background-color 0.2s;
-            }
-
-            input[type="submit"]:hover {
-                filter: brightness(90%);
-            }
-        </style>
-    </head>
-    <body>
-        <h1>Profile Settings</h1>
-        <form action="/update_settings" method="post">
-            <label for="name">Name:</label>
-            <input type="text" id="name" name="name" value="{}">
-            <label for="surname">Surname:</label>
-            <input type="text" id="surname" name="surname" value="{}">
-            <label for="email">Email:</label>
-            <input type="text" id="email" name="email" value="{}">
-            <label for="bio">Bio:</label>
-            <textarea id="bio" name="bio" rows="5">{}</textarea>
-            <input type="submit" value="Update">
-        </form>
-    </body>
-    </html>
-    """.format(name, surname, email, bio)
-
-    return html
-
-
 
 def get_user_info_from_database(user_id,self):
     

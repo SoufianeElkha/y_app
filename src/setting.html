@@ -1,1 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
 
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #e6ecf0;
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #14171A;
+        }
+
+        form {
+            background-color: #fff;
+            border-radius: 25px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            max-width: 400px;
+            margin: 0 auto;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            text-transform: capitalize;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 25px;
+            transition: border 0.2s;
+        }
+
+        input:focus, textarea:focus {
+            border-color: #1DA1F2;
+            outline: none;
+        }
+
+        input[type="submit"] {
+            background-color: #1DA1F2;
+            color: #fff;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+        input[type="submit"]:hover {
+            filter: brightness(90%);
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Settings</h1>
+    <form method="post" action="/update_settings">
+        <label for="name">Name:</label>
+        <input type="text" name="name" id="name" value="%%USER_NAME%%" placeholder="Enter your name" required>
+
+        <label for="surname">Surname:</label>
+        <input type="text" name="surname" id="surname" value="%%USER_SURNAME%%" placeholder="Enter your surname" required>
+
+        <label for="bio">Bio:</label>
+        <textarea name="bio" id="bio" placeholder="Enter your bio">"%%USER_BIO%%"</textarea>
+
+        <label for="password">Password:</label>
+        <input type="password" name="password" id="password" value="%%USER_PASSWORD%%" placeholder="Enter your password" required>
+
+        <label for="email">Email:</label>
+        <input type="email" name="email" id="email" value="%%USER_EMAIL%%" placeholder="Enter your email" required>
+
+        <input type="submit" value="Update">
+    </form>
+</body>
+
+</html>

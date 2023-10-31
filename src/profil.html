@@ -95,6 +95,13 @@
         <button value="logout">Logout</button>
     </form>
 
+    <form action="http://localhost:8001/message" method="post">
+        <label for="sendMessage">Send Message</label>
+        <textarea id="private_message" name="private_message"></textarea>
+        <input type="submit" value="Send">
+    </form>
+
+
     <form action="http://localhost:8001/uploadProfilPictureUrl" method="post">
         <label for="urlPath">Profile picture URL:</label>
         <textarea id="urlPath" name="urlPath"></textarea>
