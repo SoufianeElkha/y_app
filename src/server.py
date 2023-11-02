@@ -1,6 +1,4 @@
 import cgi
-import datetime
-from http.client import parse_headers
 import http.server
 import json
 import os
@@ -9,9 +7,9 @@ from urllib.parse import parse_qs
 import http.cookies
 import time
 import uuid
-from requests import session
 import smtplib
 from email.mime.text import MIMEText
+from datetime import datetime
 SESSIONS = {}
 
 class CustomHandler(http.server.BaseHTTPRequestHandler):
@@ -28,7 +26,7 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                 surname TEXT,
                 password TEXT,
                 birth TEXT,
-                email TEXT UNIQUE,  -- Assurez-vous que chaque e-mail est unique
+                email TEXT UNIQUE,
                 bio TEXT,
                 isAdmin BOOLEAN,
                 picture_path TEXT,
@@ -55,7 +53,6 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
         ''')
-
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY,
@@ -67,11 +64,10 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                 FOREIGN KEY (to_id) REFERENCES users (id)
             )
         ''')
-        
 
         conn.commit()
         conn.close()
-            
+        
     def is_authenticated(self) -> bool:
         if "Cookie" not in self.headers:
             return False
@@ -106,8 +102,6 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
             print(f"Exception encountered: {e}")
             return False
 
-
-
     # Connexion à la base de données et récupération du curseur
     def connect_to_db(self):
         conn = sqlite3.connect('../database/database.db')
@@ -121,7 +115,6 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'text/html')
             self.end_headers()
             self.wfile.write(content.encode())
-            
             
     # Gestion de l'inscription
     def handle_register(self, post_data):
@@ -144,9 +137,180 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-type', 'text/html')
         self.end_headers()
-        self.wfile.write(b'Inscription ok')
+        self.wfile.write(b'message ok')
+
+    def handle_send_messages(self, post_data):
+        
+        if self.is_authenticated():
+            params = parse_qs(post_data)
+            user_id = self.get_user_id_from_cookie()
+            created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            from_id = user_id
+            to_email = params['email'][0]
+            conn, cursor = self.connect_to_db()
+            cursor.execute("SELECT id FROM users WHERE email=?", (to_email,))
+            result = cursor.fetchone()
+            if result:
+                to_id = result[0]
+            else:
+                to_id = None
+
+            conn.close()
+            
+            if to_id is None:
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(b'User Not exist')
+                return
+
+            content = params['message'][0]
+
+            conn, cursor = self.connect_to_db()
+            cursor.execute('INSERT INTO messages (from_id,to_id, created_at, content) VALUES (?, ?, ?, ?)',
+                        (from_id, to_id, created_at, content,))
+            conn.commit()
+            conn.close()
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(b'message send')
+        else:
+            self.send_response(403)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(b'Session invalide ou non authentifiee.')
+        
+        
+    def handle_inbox_messages(self):
+        user_id = self.get_user_id_from_cookie()
+        conn, cursor = self.connect_to_db()
+        # Modifica la query per includere una JOIN con la tabella users
+        cursor.execute("""
+            SELECT m.id, u.email, m.created_at, m.content 
+            FROM messages m
+            JOIN users u ON m.from_id = u.id
+            WHERE m.to_id=?
+            ORDER BY m.created_at DESC
+        """, (user_id,))
+        messages = cursor.fetchall()
+        conn.close()
+
+        # Inizia a costruire l'HTML per i messaggi
+        messages_html = '''
+        <html>
+        <head>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #e6ecf0;
+        text-align: center;
+        padding: 40px 0;
+    }
+
+    h1 {
+        color: #14171A;
+        font-size: 32px;
+        margin-bottom: 40px;
+    }
+
+    .message {
+        background-color: #fff;
+        border-radius: 25px;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        max-width: 500px;
+        margin: 20px auto;
+        text-align: left;
+    }
+
+    .message strong {
+        display: block;
+        font-weight: bold;
+        color: #14171A;
+        margin-bottom: 10px;
+    }
+
+    .message p {
+        font-size: 16px;
+        line-height: 1.4;
+        color: #333;
+        margin-bottom: 10px;
+    }
+
+    .message time {
+        font-size: 14px;
+        color: #657786;
+        display: block;
+        margin-bottom: 10px;
+    }
+
+    .message button {
+        background-color: #1DA1F2;
+        color: #fff;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 25px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: background-color 0.2s;
+    }
+
+    .message button:hover {
+        filter: brightness(90%);
+    }
+</style>
+        </head>
+        <body>
+            <h1>Inbox Messages</h1>
+            <div id="messages">
+        '''
+
+        for msg in messages:
+            
+            # Estrai i dati dal risultato della query
+            sender_email = msg[1]  # email del mittente
+            created_at =  datetime.strptime(msg[2], '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d %H:%M')
+            content = msg[3]       # contenuto del messaggio
+
+            messages_html += f'''
+                <div class="message">
+                    <strong>From:</strong> {sender_email}
+                    <time>At: {created_at}</time>
+                    <p>{content}</p>
+                    <button onclick="replyTo('{sender_email}')">Reply</button>
+                </div>
+            '''
+
+        messages_html += '''
+                </div>
+                <script>
+                function replyTo(email) {
+                    // Memorizza l'email del mittente in localStorage
+                    localStorage.setItem('replyToEmail', email);
+                    // Reindirizza alla pagina di invio messaggio
+                    window.location.href = 'send_message.html';
+                }
+                </script>
+            </body>
+            </html>
+            '''
+
+        if self.is_authenticated():
+            # Invia l'HTML al client
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(messages_html.encode())
+        else:
+            self.send_response(403)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(b'Session invalid or not authenticated.')
 
     def handle_login(self, post_data):
+
         try:
             params = parse_qs(post_data)
 
@@ -161,6 +325,7 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
 
             cursor.execute("SELECT * FROM users WHERE email=? AND password=?", (email, password))
             user = cursor.fetchone()
+    
 
             # If user is None, then no user was found with the provided credentials
             if user is None:
@@ -269,9 +434,6 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
         return None
 
 
-    
-
-
     def handle_upload_profile_picture(self):
             # Récupérez l'ID de l'utilisateur à partir du cookie
             user_id = self.get_user_id_from_cookie()
@@ -311,15 +473,12 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                 self.send_header('Content-type', 'text/html')
                 self.end_headers()
                 self.wfile.write(b'Image de profil  avec !')
-                
-                
 
             else:
                 self.send_response(400)
                 self.send_header('Content-type', 'text/html')
                 self.end_headers()
                 self.wfile.write(b'Aucun fichier n\'a  .')
-
 
     def handle_upload_post_picture(self):
             # Récupérez l'ID de l'utilisateur à partir du cookie
@@ -332,21 +491,15 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(b'Vous devez   pour  une image de profil.')
                 return
-            # Récupérez le fichier de la requête
             form = cgi.FieldStorage(
                 fp=self.rfile,
                 headers=self.headers,
                 environ={'REQUEST_METHOD': 'POST'}
             )
             file_item = form['posts_pics']
-
-            # Vérifiez si le fichier a été téléchargé
             if file_item.filename:
-                # Créez le dossier s'il n'existe pas
                 if not os.path.exists('./posts_pics/'):
                     os.makedirs('./posts_pics/')
-
-                # Écrivez le fichier dans le dossier
                 with open(f'./posts_pics/{user_id}.jpg', 'wb') as f:
                     f.write(file_item.file.read())
 
@@ -367,21 +520,12 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(b'Aucun fichier n\'a  .')
 
     def get_users_from_db(self):
-        # Établissez une connexion à la base de données
         conn, cursor = self.connect_to_db()
-
-        # Exécutez la requête SQL pour obtenir les données
         cursor.execute("SELECT id, name, surname FROM users")
         users = cursor.fetchall()
-
-        # Fermez la connexion
         conn.close()
-
-        # Convertissez les données en format JSON
         users_json = [{"id": user[0], "name": user[1], "surname": user[2]} for user in users]
         return users_json
-
-
 
     def do_POST(self):
         content_length = int(self.headers['Content-Length'])
@@ -389,6 +533,11 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
         if self.path == "/register":
             post_data = self.rfile.read(content_length).decode('utf-8')
             self.handle_register(post_data)
+            
+        elif self.path == "/send":
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            self.handle_send_messages(post_data)
+
         elif self.path == "/login":
             post_data = self.rfile.read(content_length).decode('utf-8')
             self.handle_login(post_data)
@@ -407,7 +556,7 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                 self.send_response(403)
                 self.send_header('Content-type', 'text/html')
                 self.end_headers()
-                self.wfile.write(b'Session invalide ou non authentifiee.')
+                self.wfile.write(b'Session invalide ou non authentifiee.') 
 
         elif self.path == "/setting":
             post_data = self.rfile.read(content_length).decode('utf-8')
@@ -436,7 +585,7 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
             )
             # Obtenez le contenu du post à partir de cgi.FieldStorage
             content = form.getvalue('text', '')  # Utilisez getvalue pour éviter les KeyErrors
-            created_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             user_id = self.get_user_id_from_cookie()
             
             cursor.execute('INSERT INTO posts (user_id, created_at, content) VALUES (?, ?, ?)',
@@ -600,7 +749,6 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                 self.send_response(403)
                 self.end_headers()
 
-
     def do_DELETE(self):
         if self.path.startswith("/delete-user/"):
             user_id = int(self.path.split("/")[-1])
@@ -640,7 +788,21 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write("Unsupported DELETE request".encode('utf-8'))
 
     def do_GET(self):
-        if self.path == "/profil.html":
+        print("Requested path:", self.path)
+
+        if self.path == '/inbox_msg.html':
+            print("Dentro inbox")
+            self.handle_inbox_messages()
+        
+        elif self.path == '/send_message.html':
+            # Assicurati che il percorso del file sia corretto
+            with open('./send_message.html', 'rb') as file:
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(file.read())
+            
+        elif self.path == "/profil.html":
             
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
@@ -652,7 +814,6 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
             cursor.execute("SELECT * FROM posts WHERE user_id=?", (user_id,))
             posts = cursor.fetchall()    
 
-            
             conn.close()
             if user:
                 user_name = user[0]
@@ -678,7 +839,6 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
         elif self.path == "/login":
             form_html = "t'es bete"
             self.wfile.write(form_html.encode())
-
             
         elif self.path == "/setting.html":
             self.send_response(200)
@@ -773,10 +933,14 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-type', 'text/html')
             self.end_headers()
 
+
             # Affichez les informations de l'utilisateur
-            response = f"Name: {user_info[0]}<br>"
-            response += f"Surname: {user_info[1]}<br>"
-            response += f"Bio: {user_info[2]}<br>"
+            response = f"<html><body>"
+            response += f"<h2>User Information</h2>"
+            response += f"<p><strong>Name:</strong> {user_info[0]}</p>"
+            response += f"<p><strong>Surname:</strong> {user_info[1]}</p>"
+            response += f"<p><strong>Bio:</strong> {user_info[2]}</p>"
+            response += f"</body></html>"
             
             # Vérifiez si le chemin de l'image de l'utilisateur est None
             if user_info[3]:
@@ -826,7 +990,7 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(f"Error deleting user: {str(e)}".encode('utf-8'))
         else:
             print("else")
-
+            
 def get_user_info_from_database(user_id,self):
     
     conn, cursor = self.connect_to_db()
@@ -835,7 +999,6 @@ def get_user_info_from_database(user_id,self):
     user_info = cursor.fetchone()
     conn.close()
     return user_info
-
 
 def format_image_src(image_path):
     """Retourne le chemin formaté pour l'image."""
@@ -898,7 +1061,6 @@ def getAdminStateById(user_id,self):
         # Si aucun résultat n'est trouvé, retournez une valeur par défaut (par exemple, False)
         conn.close()
         return False
-
 
 def getBlockedStateById(user_id,self):
     # Établissez la connexion à la base de données

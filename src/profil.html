@@ -81,33 +81,64 @@
             margin-bottom: 10px;
         }
 
-        .post-image {
-            max-width: 100%;
-            height: auto;
+        img {
+            max-width: 100px; /* Fixed width for consistency */
+            height: auto; /* Maintain aspect ratio */
+            border-radius: 50%;
+            margin-bottom: 20px;
+            object-fit: cover; /* Ensures the image is not distorted */
+        }
+
+        @media (max-width: 1200px) {
+            h1 {
+                font-size: 30px;
+            }
+
+            button {
+                font-size: 30px;
+                padding: 20px 40px; /* Adjusted padding for smaller screens */
+            }
+
+            img {
+                max-width: 100px; /* Smaller images on mobile devices */
+            }
         }
     </style>
 </head>
-
 <body>
-    <h1>Welcome Home</h1>
+    <h1>Welcome</h1>
+    <button id="inboxButton">INBOX</button>
+    <script>
+    document.getElementById('inboxButton').addEventListener('click', function() {
+        window.location.href = 'http://localhost:8001/inbox_msg.html';
+    });
+    </script>
+    <!-- Aggiungi questo nel tuo profile.html dove vuoi che appaia il pulsante -->
+    <button id="sendMessageButton">NEW MESSAGE</button>
+
+    <script>
+    document.getElementById('sendMessageButton').addEventListener('click', function() {
+        window.location.href = 'http://localhost:8001/send_message.html';
+    });
+    </script>
+
+    <!-- Aggiungi questo nel tuo profile.html dove vuoi che appaia il pulsante -->
+    <button id="settingButton">SETTING</button>
+    <script>
+    document.getElementById('settingButton').addEventListener('click', function() {
+        window.location.href = 'http://localhost:8001/setting.html';
+    });
+    </script>
+
     
     <form action="http://localhost:8001/logout" method="post">
         <button value="logout">Logout</button>
     </form>
-
-    <form action="http://localhost:8001/message" method="post">
-        <label for="sendMessage">Send Message</label>
-        <textarea id="private_message" name="private_message"></textarea>
-        <input type="submit" value="Send">
-    </form>
-
-
     <form action="http://localhost:8001/uploadProfilPictureUrl" method="post">
         <label for="urlPath">Profile picture URL:</label>
         <textarea id="urlPath" name="urlPath"></textarea>
         <input type="submit" value="Update Picture">
     </form>
-
     <form action="http://localhost:8001/uploadProfilPicture" method="post" enctype="multipart/form-data">
         <label>Or upload a profile picture:</label>
         <input type="file" name="profile_pic" accept="image/*">
